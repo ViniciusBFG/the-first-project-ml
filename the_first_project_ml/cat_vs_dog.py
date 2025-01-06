@@ -1,75 +1,137 @@
-# Importa funções para dividir datasets e criar dataloaders
+# Importa funções para dividir datasets e criar loaders para batches
 from torch.utils.data import random_split, DataLoader
-# Importa ferramentas para manipular datasets e aplicar transformações
+# Importa datasets e ferramentas para transformação de imagens
 from torchvision import datasets, transforms
-# Importa módulo para manipulação de arquivos e diretórios
+# Manipulação de diretórios e arquivos
 import os
-# Biblioteca para manipulação de imagens
+# Manipulação de imagens
 from PIL import Image
-# Biblioteca para visualização de gráficos e imagens
+# Visualização de imagens
 import matplotlib.pyplot as plt
+# Biblioteca principal para cálculos com tensores
+import torch
+# Ferramentas para criar e treinar redes neurais
+import torch.nn as nn
+# Ferramentas de otimização
+import torch.optim as optim
 
-# Define o diretório base onde estão as imagens
-base_folder = "/content/train"
-# Define as categorias de imagens
-categories = ["dog", "cat"]
+# Define o diretório base do dataset
+base_folder = "/content/dataset/PetImages"
+# Define as categorias do dataset
+categories = ["Dog", "Cat"]
 
-for category in categories:                           # Itera sobre cada categoria
-    # Cria o caminho completo para a pasta da categoria
+# Loop para exibir as primeiras imagens de cada categoria
+for category in categories:
+    # Define o caminho da pasta da categoria
     folder_path = os.path.join(base_folder, category)
-    image_files = [f for f in os.listdir(             # Lista arquivos na pasta que são imagens
+    # Lista os arquivos de imagem na pasta
+    image_files = [f for f in os.listdir(
         folder_path) if os.path.isfile(os.path.join(folder_path, f))]
 
-    # Exibe o nome da categoria
     print(f"Mostrando imagens da categoria: {category}")
 
-    # Mostra as 5 primeiras imagens de cada categoria
-    # Itera sobre os 5 primeiros arquivos de imagem
+    # Loop para mostrar até 5 imagens
     for img_file in image_files[:5]:
-        # Cria o caminho completo da imagem
         img_path = os.path.join(folder_path, img_file)
-        img = Image.open(img_path)                     # Abre a imagem
-        plt.imshow(img)                                # Exibe a imagem
-        # Adiciona o título com o nome da categoria
-        plt.title(f"Categoria: {category}")
-        # Remove os eixos da imagem
-        plt.axis('off')
-        plt.show()                                     # Mostra a imagem
+        try:
+            # Abre a imagem no modo RGB
+            img = Image.open(img_path).convert("RGB")
+            # Exibe a imagem com título
+            plt.imshow(img)
+            plt.title(f"Categoria: {category}")
+            plt.axis('off')  # Remove os eixos
+            plt.show()
+        except Exception as e:
+            print(f"Erro ao carregar imagem {img_path}: {e}")
 
-# Transformações para redimensionar e converter as imagens em tensores
-transform = transforms.Compose([                      # Define a sequência de transformações
-    # Redimensiona as imagens para 64x64
-    transforms.Resize((64, 64)),
-    # Converte as imagens para tensores
-    transforms.ToTensor()
+# Classe para dataset que ignora imagens corrompidas
+
+
+class SafeImageFolder(datasets.ImageFolder):
+    def __getitem__(self, index):
+        while True:  # Tenta carregar a imagem até conseguir
+            try:
+                # Caminho e rótulo da imagem
+                path, target = self.samples[index]
+                sample = Image.open(path).convert(
+                    "RGB")  # Carrega a imagem como RGB
+                if self.transform is not None:  # Aplica as transformações se existirem
+                    sample = self.transform(sample)
+                return sample, target  # Retorna imagem e rótulo
+            except Exception as e:
+                print(f"Erro ao carregar imagem: {
+                      self.samples[index]}. Ignorando...")
+                # Vai para a próxima imagem
+                index = (index + 1) % len(self.samples)
+
+
+# Define as transformações a serem aplicadas nas imagens
+transform = transforms.Compose([
+    transforms.Resize((64, 64)),  # Redimensiona para 64x64
+    transforms.ToTensor()  # Converte para tensor
 ])
 
-# Carregar o dataset com transformações
-# Diretório onde está o dataset
-data_dir = "/content/train"
-# Carrega o dataset e aplica as transformações
-dataset = datasets.ImageFolder(data_dir, transform=transform)
+# Cria o dataset usando a classe segura
+data_dir = "/content/dataset/PetImages"
+safe_dataset = SafeImageFolder(data_dir, transform=transform)
 
-# Dividir em treino e validação
-# Calcula o tamanho do conjunto de treino (80%)
-train_size = int(0.8 * len(dataset))
-# Calcula o tamanho do conjunto de validação (restante)
-val_size = len(dataset) - train_size
-train_dataset, val_dataset = random_split(           # Divide o dataset em treino e validação
-    dataset, [train_size, val_size]
-)
+# Divide o dataset em treino (80%) e validação (20%)
+train_size = int(0.8 * len(safe_dataset))
+val_size = len(safe_dataset) - train_size
+train_dataset, val_dataset = random_split(safe_dataset, [train_size, val_size])
 
-# Criar dataloaders
-train_loader = DataLoader(                           # Cria o dataloader para o conjunto de treino
-    # Define o tamanho do lote e embaralhamento
-    train_dataset, batch_size=32, shuffle=True
-)
-val_loader = DataLoader(                             # Cria o dataloader para o conjunto de validação
-    # Define o tamanho do lote sem embaralhamento
-    val_dataset, batch_size=32
-)
+# Cria DataLoaders para carregar os datasets em batches
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=32)
 
-# Exibe o número de imagens no conjunto de treino
+# Exibe o número de imagens nos conjuntos de treino e validação
 print(f"Número de imagens de treino: {len(train_dataset)}")
-# Exibe o número de imagens no conjunto de validação
 print(f"Número de imagens de validação: {len(val_dataset)}")
+
+# Define uma rede neural simples com uma camada convolucional e uma totalmente conectada
+
+
+class SimpleCNN(nn.Module):
+    def __init__(self):
+        super(SimpleCNN, self).__init__()
+        # Camada convolucional
+        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1)
+        # Pooling para reduzir a dimensão
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        # Camada totalmente conectada (classificação)
+        self.fc1 = nn.Linear(16 * 32 * 32, 2)
+
+    def forward(self, x):
+        x = self.pool(torch.relu(self.conv1(x)))  # Aplica ReLU e pooling
+        # Redimensiona para entrada na camada totalmente conectada
+        x = x.view(-1, 16 * 32 * 32)
+        x = self.fc1(x)  # Saída final
+        return x
+
+
+# Instancia o modelo
+model = SimpleCNN()
+# Define a função de perda
+criterion = nn.CrossEntropyLoss()
+# Define o otimizador (Adam)
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+# Loop de treinamento
+for epoch in range(5):  # Número de épocas
+    model.train()  # Coloca o modelo em modo de treinamento
+    running_loss = 0.0
+
+    for inputs, labels in train_loader:  # Loop pelos batches de treino
+        try:
+            optimizer.zero_grad()  # Zera os gradientes acumulados
+            outputs = model(inputs)  # Forward pass
+            loss = criterion(outputs, labels)  # Calcula a perda
+            loss.backward()  # Backward pass (cálculo do gradiente)
+            optimizer.step()  # Atualiza os pesos
+            running_loss += loss.item()  # Acumula a perda
+        except Exception as e:
+            print(f"Erro ao processar um batch. Ignorando... Detalhes: {e}")
+            continue
+
+    # Exibe a perda média por época
+    print(f"Época {epoch+1}, Perda média: {running_loss/len(train_loader):.4f}")
