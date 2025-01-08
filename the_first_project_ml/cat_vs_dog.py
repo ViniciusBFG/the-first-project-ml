@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import torch
 # Ferramentas para criar e treinar redes neurais
 import torch.nn as nn
-# Ferramentas de otimização
+# Ferramentas de otimizaçãoo
 import torch.optim as optim
 
 # Define o diretório base do dataset
