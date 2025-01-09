@@ -67,7 +67,7 @@ class SafeImageFolder(datasets.ImageFolder):
 
 # Define as transformações a serem aplicadas nas imagens
 transform = transforms.Compose([
-    transforms.Resize((64, 64)),  # Redimensiona para 64x64
+    transforms.Resize((64, 64)),  # Redimensiona para 64 por 64
     transforms.ToTensor()  # Converte para tensor
 ])
 
